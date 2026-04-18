@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mo's Sales Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600&family=Source+Sans+3:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #f5f3ee;
+    --bg2:     #ffffff;
+    --bg3:     #edeae3;
+    --border:  rgba(0,0,0,0.09);
+    --border2: rgba(0,0,0,0.18);
+    --text:    #1a1814;
+    --text2:   #5a5650;
+    --text3:   #9a9490;
+    --accent:  #2c5f8a;
+    --accent2: #1e4266;
+    --teal:    #1f7a60;
+    --blue:    #2c5f8a;
+    --coral:   #b84a2e;
+    --purple:  #5c3d8f;
+    --amber:   #8a5c1e;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html,body { background:var(--bg); color:var(--text); font-family:'Source Sans 3',sans-serif; font-size:15px; min-height:100vh; }
+
+  /* ── Upload ────────────────────────────────────────── */
+  #upload-screen {
+    min-height:100vh; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; padding:2rem;
+    position:relative; overflow:hidden;
+  }
+  #upload-screen::before { content:''; position:absolute; top:0; left:0; right:0; height:4px; background:linear-gradient(90deg,var(--accent),var(--teal)); }
+  .upload-eyebrow { font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:1.25rem; }
+  .upload-title { font-family:'Lora',serif; font-size:34px; font-weight:400; color:var(--text); text-align:center; line-height:1.3; margin-bottom:.6rem; max-width:480px; }
+  .upload-sub { font-size:14px; color:var(--text2); text-align:center; margin-bottom:2.5rem; max-width:400px; line-height:1.65; }
+  .upload-card { background:var(--bg2); border:1px solid var(--border2); border-radius:14px; padding:2.25rem; width:100%; max-width:560px; box-shadow:0 2px 16px rgba(0,0,0,.07); }
+  .step-label { font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:.85rem; }
+  .count-row { display:flex; align-items:center; gap:14px; margin-bottom:1.75rem; }
+  .count-label { font-size:14px; color:var(--text2); flex:1; line-height:1.5; }
+  .count-ctrl { display:flex; align-items:center; border:1px solid var(--border2); border-radius:8px; overflow:hidden; }
+  .count-btn { width:36px; height:36px; background:var(--bg3); border:none; color:var(--text); cursor:pointer; font-size:18px; display:flex; align-items:center; justify-content:center; transition:background .15s; }
+  .count-btn:hover { background:#ddd9d0; }
+  .count-val { width:44px; height:36px; background:#fff; color:var(--text); border:none; border-left:1px solid var(--border); border-right:1px solid var(--border); text-align:center; font-size:15px; font-family:'Source Sans 3',sans-serif; font-weight:600; }
+  .count-val::-webkit-inner-spin-button,.count-val::-webkit-outer-spin-button { -webkit-appearance:none; }
+  #file-slots { display:flex; flex-direction:column; gap:10px; margin-bottom:1.75rem; }
+  .file-slot { display:flex; align-items:center; gap:12px; background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:11px 15px; cursor:pointer; transition:border-color .2s,background .2s; position:relative; overflow:hidden; }
+  .file-slot:hover { border-color:var(--border2); background:#e8e4dc; }
+  .file-slot.filled { border-color:rgba(31,122,96,.45); background:rgba(31,122,96,.04); }
+  .file-slot input[type=file] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; }
+  .slot-icon { width:30px; height:30px; border-radius:7px; background:var(--bg2); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .slot-icon svg { width:15px; height:15px; stroke:var(--text3); fill:none; }
+  .file-slot.filled .slot-icon svg { stroke:var(--teal); }
+  .slot-info { flex:1; min-width:0; }
+  .slot-title { font-size:13px; color:var(--text2); }
+  .slot-name { font-size:13px; color:var(--teal); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:none; }
+  .file-slot.filled .slot-name { display:block; }
+  .file-slot.filled .slot-title { display:none; }
+  .slot-badge { font-size:10px; background:rgba(31,122,96,.1); color:var(--teal); padding:2px 9px; border-radius:20px; flex-shrink:0; display:none; font-weight:600; border:1px solid rgba(31,122,96,.2); }
+  .file-slot.filled .slot-badge { display:block; }
+  .platform-select { width:100%; background:var(--bg2); border:1px solid var(--border); color:var(--text2); font-family:'Source Sans 3',sans-serif; font-size:11px; padding:4px 7px; border-radius:5px; margin-top:4px; }
+  .analyse-btn { width:100%; padding:13px; background:var(--accent); color:#fff; border:none; border-radius:9px; font-family:'Source Sans 3',sans-serif; font-size:15px; font-weight:600; cursor:pointer; transition:background .18s,transform .1s; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .analyse-btn:hover { background:var(--accent2); }
+  .analyse-btn:active { transform:scale(.99); }
+  .analyse-btn:disabled { background:var(--bg3); color:var(--text3); cursor:not-allowed; }
+  .upload-hint { font-size:12px; color:var(--text3); text-align:center; margin-top:1.5rem; line-height:1.7; }
+
+  /* ── Dashboard ─────────────────────────────────────── */
+  #dashboard-screen { display:none; min-height:100vh; }
+  .dash-header { padding:1rem 2rem; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:12px; position:sticky; top:0; background:rgba(245,243,238,.96); backdrop-filter:blur(8px); z-index:100; }
+  .dash-header-left { display:flex; align-items:center; gap:16px; }
+  .dash-logo { font-family:'Lora',serif; font-size:16px; color:var(--accent); }
+  .dash-meta { font-size:12px; color:var(--text3); border-left:1px solid var(--border); padding-left:16px; }
+  .dash-header-right { display:flex; align-items:center; gap:8px; }
+  .hdr-btn { font-size:12px; font-family:'Source Sans 3',sans-serif; font-weight:500; padding:7px 15px; border-radius:6px; cursor:pointer; transition:all .15s; display:flex; align-items:center; gap:6px; }
+  .pdf-btn { background:var(--accent); color:#fff; border:none; }
+  .pdf-btn:hover { background:var(--accent2); }
+  .reset-btn { background:var(--bg3); color:var(--text2); border:1px solid var(--border); }
+  .reset-btn:hover { background:#ddd9d0; color:var(--text); }
+  .dash-body { padding:2rem; max-width:1200px; margin:0 auto; }
+  .metrics-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:2rem; }
+  .metric-card { background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:1.25rem 1.5rem; border-top:3px solid var(--border); }
+  .metric-card.c-blue  { border-top-color:var(--blue); }
+  .metric-card.c-teal  { border-top-color:var(--teal); }
+  .metric-card.c-amber { border-top-color:var(--amber); }
+  .metric-card.c-purple{ border-top-color:var(--purple); }
+  .metric-label { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text3); font-weight:600; margin-bottom:8px; }
+  .metric-value { font-family:'Lora',serif; font-size:30px; color:var(--text); line-height:1; }
+  .metric-sub { font-size:11px; color:var(--text3); margin-top:6px; }
+  .section-title { font-family:'Lora',serif; font-size:17px; font-weight:400; color:var(--text); margin:2rem 0 1rem; display:flex; align-items:center; gap:12px; }
+  .section-title::after { content:''; flex:1; height:1px; background:var(--border); }
+  .charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:1.5rem; }
+  .chart-card { background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:1.25rem 1.5rem; }
+  .chart-label { font-size:12px; color:var(--text2); margin-bottom:14px; font-weight:600; }
+  .chart-wrap { position:relative; height:220px; }
+  .tabs-row { display:flex; gap:6px; margin-bottom:1rem; flex-wrap:wrap; }
+  .tab-btn { font-size:12px; padding:6px 14px; border:1px solid var(--border); border-radius:20px; cursor:pointer; color:var(--text2); background:var(--bg2); font-family:'Source Sans 3',sans-serif; font-weight:500; transition:all .15s; }
+  .tab-btn:hover { border-color:var(--border2); color:var(--text); }
+  .tab-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .table-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; }
+  th { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text3); font-weight:700; padding:9px 12px; text-align:left; border-bottom:2px solid var(--border); background:var(--bg3); }
+  td { font-size:13px; color:var(--text2); padding:9px 12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  tr:hover td { background:#faf8f4; }
+  td:first-child { color:var(--text3); font-size:12px; font-weight:600; width:32px; }
+  td.title-cell { color:var(--text); max-width:320px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  td.num { text-align:right; font-family:'Lora',serif; font-size:15px; color:var(--text); white-space:nowrap; }
+  .genre-pill { display:inline-block; font-size:10px; padding:2px 8px; border-radius:4px; background:var(--bg3); color:var(--text3); border:1px solid var(--border); font-weight:500; }
+  .platform-pill { display:inline-block; font-size:10px; padding:2px 7px; border-radius:4px; margin-left:5px; font-weight:600; }
+  .pill-kdp  { background:rgba(44,95,138,.08);  color:var(--blue);   border:1px solid rgba(44,95,138,.2); }
+  .pill-d2d  { background:rgba(31,122,96,.08);  color:var(--teal);   border:1px solid rgba(31,122,96,.2); }
+  .pill-both { background:rgba(92,61,143,.08);  color:var(--purple); border:1px solid rgba(92,61,143,.2); }
+  .free-badge { display:inline-block; font-size:10px; padding:2px 7px; border-radius:4px; background:rgba(138,92,30,.08); color:var(--amber); border:1px solid rgba(138,92,30,.2); font-weight:600; margin-left:5px; }
+  .bar-inline { display:inline-block; height:5px; border-radius:3px; vertical-align:middle; margin-right:8px; opacity:.75; }
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .region-list { display:flex; flex-direction:column; gap:9px; }
+  .region-row { display:flex; align-items:center; gap:10px; }
+  .region-name { font-size:13px; color:var(--text2); min-width:140px; }
+  .region-track { flex:1; height:5px; background:var(--bg3); border-radius:3px; }
+  .region-fill { height:5px; border-radius:3px; }
+  .region-num { font-size:13px; color:var(--text); font-weight:600; min-width:32px; text-align:right; }
+  .error-box { background:rgba(150,32,32,.07); border:1px solid rgba(150,32,32,.25); border-radius:8px; padding:12px 16px; font-size:13px; color:#962020; margin-bottom:1rem; }
+  #pdf-overlay { display:none; position:fixed; inset:0; background:rgba(245,243,238,.88); backdrop-filter:blur(6px); z-index:9999; align-items:center; justify-content:center; flex-direction:column; gap:16px; }
+  #pdf-overlay.active { display:flex; }
+  .pdf-spinner { width:40px; height:40px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .pdf-overlay-text { font-family:'Lora',serif; font-size:16px; color:var(--text2); }
+  @media (max-width:768px) {
+    .metrics-grid { grid-template-columns:repeat(2,1fr); }
+    .charts-grid,.two-col { grid-template-columns:1fr; }
+    .dash-header { flex-wrap:wrap; gap:8px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="pdf-overlay">
+  <div class="pdf-spinner"></div>
+  <div class="pdf-overlay-text">Preparing your PDF report…</div>
+</div>
+
+<!-- ══ UPLOAD ════════════════════════════════════════════════ -->
+<div id="upload-screen">
+  <div class="upload-eyebrow">Mo's Publishing Analytics</div>
+  <h1 class="upload-title">Sales Dashboard</h1>
+  <p class="upload-sub">Upload your raw exports from Draft2Digital and Amazon KDP — the dashboard builds itself instantly, in your browser.</p>
+  <div class="upload-card">
+    <div class="step-label">Step 1 — How many files?</div>
+    <div class="count-row">
+      <div class="count-label">Number of report files to upload<br><span style="font-size:12px;color:var(--text3)">D2D CSV files + KDP Excel files</span></div>
+      <div class="count-ctrl">
+        <button class="count-btn" onclick="adjustCount(-1)">−</button>
+        <input class="count-val" type="number" id="fileCount" value="2" min="1" max="10" onchange="renderSlots()">
+        <button class="count-btn" onclick="adjustCount(1)">+</button>
+      </div>
+    </div>
+    <div class="step-label">Step 2 — Select your files</div>
+    <div id="file-slots"></div>
+    <button class="analyse-btn" id="analyseBtn" onclick="runAnalysis()" disabled>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Analyse &amp; Build Dashboard
+    </button>
+  </div>
+  <div class="upload-hint">Formats: D2D Sales CSV &nbsp;·&nbsp; KDP KENP / Orders Excel (.xlsx)<br>All processing is local — no data leaves your computer.</div>
+</div>
+
+<!-- ══ DASHBOARD ══════════════════════════════════════════════ -->
+<div id="dashboard-screen">
+  <div class="dash-header">
+    <div class="dash-header-left">
+      <div class="dash-logo">Mo's Sales Dashboard</div>
+      <div class="dash-meta" id="dash-period"></div>
+    </div>
+    <div class="dash-header-right">
+      <button class="hdr-btn pdf-btn" onclick="exportPDF()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export PDF
+      </button>
+      <button class="hdr-btn reset-btn" onclick="resetDashboard()">← New upload</button>
+    </div>
+  </div>
+
+  <div class="dash-body" id="pdf-content">
+    <div id="error-area"></div>
+    <div class="metrics-grid">
+      <div class="metric-card c-blue"><div class="metric-label">Total units sold</div><div class="metric-value" id="m-total">—</div><div class="metric-sub">Paid copies, all platforms</div></div>
+      <div class="metric-card c-teal"><div class="metric-label">D2D units</div><div class="metric-value" id="m-d2d">—</div><div class="metric-sub" id="m-d2d-sub">distributors · countries</div></div>
+      <div class="metric-card c-amber"><div class="metric-label">KDP units</div><div class="metric-value" id="m-kdp">—</div><div class="metric-sub" id="m-kdp-sub">marketplaces</div></div>
+      <div class="metric-card c-purple"><div class="metric-label">KENP pages read</div><div class="metric-value" id="m-kenp">—</div><div class="metric-sub">Kindle Unlimited reads</div></div>
+    </div>
+    <div class="section-title">Genre &amp; Revenue</div>
+    <div class="charts-grid">
+      <div class="chart-card"><div class="chart-label">Sales by genre — D2D vs KDP (units)</div><div class="chart-wrap"><canvas id="genreChart"></canvas></div></div>
+      <div class="chart-card"><div class="chart-label">KDP royalty earnings by genre (USD)</div><div class="chart-wrap"><canvas id="revenueChart"></canvas></div></div>
+    </div>
+    <div class="section-title">Platform &amp; Region</div>
+    <div class="charts-grid">
+      <div class="chart-card"><div class="chart-label">KDP marketplace — unit sales</div><div class="chart-wrap"><canvas id="mktChart"></canvas></div></div>
+      <div class="chart-card"><div class="chart-label">KENP pages read — by marketplace</div><div class="chart-wrap"><canvas id="kenpMktChart"></canvas></div></div>
+    </div>
+    <div class="two-col" style="margin-bottom:1.5rem">
+      <div class="chart-card"><div class="chart-label">D2D — top countries (units)</div><div id="d2d-countries" class="region-list"></div></div>
+      <div class="chart-card"><div class="chart-label">D2D — top distributors (units)</div><div id="d2d-distributors" class="region-list"></div></div>
+    </div>
+    <div class="section-title">Title Rankings</div>
+    <div class="tabs-row">
+      <button class="tab-btn active" onclick="showTable('paid')">Top 20 paid titles</button>
+      <button class="tab-btn" onclick="showTable('free')">Free downloads</button>
+      <button class="tab-btn" onclick="showTable('kenp')">Top KENP reads</button>
+    </div>
+    <div class="chart-card table-wrap" id="table-container"></div>
+    <div style="margin-top:2rem;font-size:11px;color:var(--text3);text-align:center;padding-bottom:1rem">
+      Mo's Sales Dashboard &nbsp;·&nbsp; All data processed locally in browser
+    </div>
+  </div>
+</div>
+
+<script>
+// ══ GENRE CLASSIFIER ═══════════════════════════════════
+function classifyGenre(title) {
+  const t=(title||'').toLowerCase();
+  if(/cybersecurity|security|zero trust|firewall|microsegment|packets|threat|ciso|pentest|sase|illumio/.test(t)) return 'Cybersecurity';
+  if(/ai agent|claude|chatgpt|gemini|perplexity|grok|mistral|kimi|openai|llm|copilot|artificial|machine learning|generative|openclaw|local ai|opal|qwen|poe|leo ai|meta ai|building ai/.test(t)) return 'AI/LLM Tools';
+  if(/python|coding|developer|programming|sql|mac mastery|flow chart|mermaid|visualize|graphviz|plantum|blockdiag|excel/.test(t)) return 'Tech/Dev Tools';
+  if(/enterprise|microsoft|azure|aws|cloud|stack|governance|digital transform/.test(t)) return 'Enterprise Tech';
+  if(/career|corporate|talent|hiring|job|resume|gyro|test match|workplace|professional|sinked|careers of/.test(t)) return 'Career/Business';
+  if(/apply|design|graphic|ux|product/.test(t)) return 'Design/Productivity';
+  if(/sanskrit|rudram|purusha|spiritual|sacred|thread|panditji|pancha bheda/.test(t)) return 'Spirituality/Culture';
+  if(/tamil|கறுப்|fiction|novel|story|screech|absurd|humor|humour|westbound|fidelity|என் கை|கடைசி|நேற்றைய|merkke/.test(t)) return 'Fiction/Humor';
+  if(/crorepati|wealth|invest|financ/.test(t)) return 'Personal Finance';
+  return 'Other';
+}
+
+// ══ SLOTS ═══════════════════════════════════════════════
+const fileStore={};
+function adjustCount(d){
+  const el=document.getElementById('fileCount');
+  el.value=Math.max(1,Math.min(10,(parseInt(el.value)||2)+d));
+  renderSlots();
+}
+function renderSlots(){
+  const n=Math.max(1,Math.min(10,parseInt(document.getElementById('fileCount').value)||2));
+  const c=document.getElementById('file-slots'); c.innerHTML='';
+  for(let i=0;i<n;i++){
+    const s=document.createElement('div');
+    s.className='file-slot'+(fileStore[i]?' filled':''); s.id='slot-'+i;
+    s.innerHTML=`<input type="file" accept=".csv,.xlsx,.xls" onchange="fileSelected(event,${i})">
+      <div class="slot-icon"><svg viewBox="0 0 24 24" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+      <div class="slot-info">
+        <div class="slot-title">File ${i+1} — click to select (.csv or .xlsx)</div>
+        <div class="slot-name" id="slot-name-${i}">${fileStore[i]?.name||''}</div>
+        <select class="platform-select" id="slot-plat-${i}" onchange="event.stopPropagation()">
+          <option value="auto">Auto-detect platform</option>
+          <option value="d2d">Draft2Digital (CSV)</option>
+          <option value="kdp">Amazon KDP (Excel)</option>
+        </select>
+      </div>
+      <span class="slot-badge">✓ Ready</span>`;
+    c.appendChild(s);
+  }
+  checkReady();
+}
+function fileSelected(e,i){
+  const f=e.target.files[0]; if(!f) return;
+  fileStore[i]=f;
+  document.getElementById('slot-'+i).classList.add('filled');
+  document.getElementById('slot-name-'+i).textContent=f.name;
+  const sel=document.getElementById('slot-plat-'+i);
+  if(f.name.endsWith('.csv')) sel.value='d2d';
+  else if(f.name.endsWith('.xlsx')||f.name.endsWith('.xls')) sel.value='kdp';
+  checkReady();
+}
+function checkReady(){
+  const n=Math.max(1,parseInt(document.getElementById('fileCount').value)||2);
+  const filled=Object.keys(fileStore).filter(k=>parseInt(k)<n).length;
+  document.getElementById('analyseBtn').disabled=filled===0;
+}
+renderSlots();
+
+// ══ READERS ═════════════════════════════════════════════
+function readCSV(f){return new Promise((res,rej)=>Papa.parse(f,{header:true,skipEmptyLines:true,complete:r=>res(r.data),error:rej}));}
+function readXLSX(f){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      try{
+        const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
+        const sh={};
+        wb.SheetNames.forEach(n=>{sh[n]=XLSX.utils.sheet_to_json(wb.Sheets[n],{defval:''}); });
+        res(sh);
+      }catch(err){rej(err);}
+    };
+    r.readAsArrayBuffer(f);
+  });
+}
+
+// ══ DATA ════════════════════════════════════════════════
+let D2D=[],KDP_EBOOK=[],KDP_ORDERS=[],KDP_KENP=[],KDP_ORDERS_PLACED=[];
+let charts=[];
+
+async function runAnalysis(){
+  const btn=document.getElementById('analyseBtn');
+  btn.disabled=true; btn.textContent='Processing…';
+  D2D=[]; KDP_EBOOK=[]; KDP_ORDERS=[]; KDP_KENP=[]; KDP_ORDERS_PLACED=[];
+  const n=Math.max(1,parseInt(document.getElementById('fileCount').value)||2);
+  try{
+    for(let i=0;i<n;i++){
+      if(!fileStore[i]) continue;
+      const f=fileStore[i];
+      const plat=document.getElementById('slot-plat-'+i).value;
+      const isCSV=f.name.endsWith('.csv');
+      const isXLSX=f.name.endsWith('.xlsx')||f.name.endsWith('.xls');
+      if(plat==='d2d'||(plat==='auto'&&isCSV)){
+        D2D.push(...await readCSV(f));
+      }else if(plat==='kdp'||(plat==='auto'&&isXLSX)){
+        const sh=await readXLSX(f);
+        if(sh['eBook Royalty']) KDP_EBOOK.push(...sh['eBook Royalty']);
+        if(sh['Orders Processed']) KDP_ORDERS.push(...sh['Orders Processed']);
+        if(sh['KENP Read']) KDP_KENP.push(...sh['KENP Read']);
+        if(sh['eBook Orders Placed']) KDP_ORDERS_PLACED.push(...sh['eBook Orders Placed']);
+      }
+    }
+    buildDashboard();
+  }catch(err){
+    btn.disabled=false;
+    btn.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Analyse &amp; Build Dashboard';
+    document.getElementById('error-area').innerHTML=`<div class="error-box">Error reading files: ${err.message}</div>`;
+    document.getElementById('upload-screen').style.display='none';
+    document.getElementById('dashboard-screen').style.display='block';
+  }
+}
+
+const num=v=>parseFloat(v)||0;
+function dedup(arr,keys){
+  const seen=new Set();
+  return arr.filter(r=>{const k=keys.map(k=>r[k]).join('|');if(seen.has(k))return false;seen.add(k);return true;});
+}
+
+function buildDashboard(){
+  const d2dPaid=D2D.filter(r=>num(r['Net Unit Sales'])>0);
+  const kdpEbook=dedup(KDP_EBOOK.filter(r=>num(r['Net Units Sold'])>0),['Title','Marketplace','Royalty Date']);
+  const kdpOrders=dedup([...KDP_ORDERS,...KDP_ORDERS_PLACED],['Title','Date','Marketplace']);
+  const kdpKenp=dedup(KDP_KENP,['Title','Date','Marketplace']);
+
+  function groupSum(arr,kf,vf){
+    const m={};
+    arr.forEach(r=>{const k=r[kf]||'Unknown';m[k]=(m[k]||0)+num(r[vf]);});
+    return Object.entries(m).sort((a,b)=>b[1]-a[1]);
+  }
+
+  const d2dTotal=d2dPaid.reduce((s,r)=>s+num(r['Net Unit Sales']),0);
+  const kdpTotal=kdpEbook.reduce((s,r)=>s+num(r['Net Units Sold']),0);
+  const kenpTotal=kdpKenp.reduce((s,r)=>s+num(r['Kindle Edition Normalized Page (KENP) Read']),0);
+  const d2dCountries=new Set(d2dPaid.map(r=>r['Country'])).size;
+  const d2dDists=new Set(d2dPaid.map(r=>r['Distributor'])).size;
+  const kdpMkts=new Set(kdpEbook.map(r=>r['Marketplace'])).size;
+
+  document.getElementById('m-total').textContent=(d2dTotal+kdpTotal).toLocaleString();
+  document.getElementById('m-d2d').textContent=d2dTotal.toLocaleString();
+  document.getElementById('m-d2d-sub').textContent=`${d2dDists} distributor${d2dDists!==1?'s':''} · ${d2dCountries} countries`;
+  document.getElementById('m-kdp').textContent=kdpTotal.toLocaleString();
+  document.getElementById('m-kdp-sub').textContent=`${kdpMkts} marketplace${kdpMkts!==1?'s':''}`;
+  document.getElementById('m-kenp').textContent=Math.round(kenpTotal).toLocaleString();
+
+  const genreLabels=['AI/LLM Tools','Cybersecurity','Tech/Dev Tools','Enterprise Tech','Design/Productivity','Career/Business','Personal Finance','Spirituality/Culture','Fiction/Humor','Other'];
+  function genreSum(arr,vf){
+    const m={};
+    arr.forEach(r=>{const g=classifyGenre(r['Title']||'');m[g]=(m[g]||0)+num(r[vf]);});
+    return genreLabels.map(l=>m[l]||0);
+  }
+  const d2dG=genreSum(d2dPaid,'Net Unit Sales');
+  const kdpG=genreSum(kdpEbook,'Net Units Sold');
+  const kdpR=genreSum(kdpEbook,'Royalty');
+  const nzI=genreLabels.map((l,i)=>(d2dG[i]+kdpG[i])>0?i:-1).filter(i=>i>=0);
+  const glF=nzI.map(i=>genreLabels[i]);
+  const d2dGF=nzI.map(i=>d2dG[i]);
+  const kdpGF=nzI.map(i=>kdpG[i]);
+  const kdpRF=nzI.map(i=>kdpR[i]);
+
+  const mktU=groupSum(kdpEbook,'Marketplace','Net Units Sold').slice(0,8);
+  const kenpM=groupSum(kdpKenp,'Marketplace','Kindle Edition Normalized Page (KENP) Read').slice(0,8);
+  const d2dCD=groupSum(d2dPaid,'Country','Net Unit Sales').slice(0,8);
+  const d2dDD=groupSum(d2dPaid,'Distributor','Net Unit Sales').slice(0,8);
+
+  function titleAgg(arr,vf){
+    const m={};
+    arr.forEach(r=>{const t=r['Title']||'Untitled';m[t]=(m[t]||0)+num(r[vf]);});
+    return Object.entries(m).sort((a,b)=>b[1]-a[1]);
+  }
+  const pD=titleAgg(d2dPaid,'Net Unit Sales');
+  const pK=titleAgg(kdpEbook,'Net Units Sold');
+  const pm={};
+  pD.forEach(([t,v])=>{pm[t]={paid:(pm[t]?.paid||0)+v,plat:'D2D'};});
+  pK.forEach(([t,v])=>{if(!pm[t])pm[t]={paid:0,plat:'KDP'};pm[t].paid+=v;pm[t].plat=pm[t].plat==='D2D'?'Both':'KDP';});
+  const top20Paid=Object.entries(pm).sort((a,b)=>b[1].paid-a[1].paid).slice(0,20);
+  const fm={};
+  kdpOrders.forEach(r=>{const t=r['Title']||'Untitled';const f=num(r['Free Units']);if(f>0)fm[t]=(fm[t]||0)+f;});
+  const topFree=Object.entries(fm).sort((a,b)=>b[1]-a[1]).slice(0,20);
+  const topKenp=titleAgg(kdpKenp,'Kindle Edition Normalized Page (KENP) Read').slice(0,20);
+
+  charts.forEach(c=>c.destroy()); charts=[];
+  const gc='rgba(0,0,0,0.06)', tc='#9a9490';
+  const cc=['#2c5f8a','#1f7a60','#8a5c1e','#5c3d8f','#b84a2e','#2a6640','#7a3535','#4a6a8a'];
+
+  charts.push(new Chart(document.getElementById('genreChart'),{type:'bar',
+    data:{labels:glF.map(l=>l.length>13?l.slice(0,11)+'…':l),datasets:[{label:'D2D',data:d2dGF,backgroundColor:'#1f7a60'},{label:'KDP',data:kdpGF,backgroundColor:'#2c5f8a'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:tc,font:{size:11},boxWidth:10}}},scales:{x:{ticks:{color:tc,font:{size:10},maxRotation:35},grid:{color:gc}},y:{ticks:{color:tc,font:{size:10}},grid:{color:gc}}}}}));
+
+  charts.push(new Chart(document.getElementById('revenueChart'),{type:'bar',
+    data:{labels:glF.map(l=>l.length>13?l.slice(0,11)+'…':l),datasets:[{label:'Royalty USD',data:kdpRF.map(v=>Math.round(v*100)/100),backgroundColor:'#8a5c1e'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:tc,font:{size:10},maxRotation:35},grid:{color:gc}},y:{ticks:{color:tc,font:{size:10},callback:v=>'$'+v},grid:{color:gc}}}}}));
+
+  charts.push(new Chart(document.getElementById('mktChart'),{type:'doughnut',
+    data:{labels:mktU.map(x=>x[0].replace('Amazon.','.amazon.')),datasets:[{data:mktU.map(x=>x[1]),backgroundColor:cc}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:tc,font:{size:10},boxWidth:10}}}}}));
+
+  charts.push(new Chart(document.getElementById('kenpMktChart'),{type:'doughnut',
+    data:{labels:kenpM.map(x=>x[0].replace('Amazon.','.amazon.')),datasets:[{data:kenpM.map(x=>Math.round(x[1])),backgroundColor:cc}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:tc,font:{size:10},boxWidth:10}}}}}));
+
+  const CN={US:'🇺🇸 United States',AE:'🇦🇪 UAE',IN:'🇮🇳 India',GB:'🇬🇧 UK',DE:'🇩🇪 Germany',CA:'🇨🇦 Canada',AU:'🇦🇺 Australia',NL:'🇳🇱 Netherlands',FR:'🇫🇷 France',JP:'🇯🇵 Japan',BR:'🇧🇷 Brazil',PL:'🇵🇱 Poland',IT:'🇮🇹 Italy',HK:'🇭🇰 Hong Kong',BE:'🇧🇪 Belgium',MX:'🇲🇽 Mexico',SE:'🇸🇪 Sweden',NO:'🇳🇴 Norway',CH:'🇨🇭 Switzerland',TR:'🇹🇷 Turkey',GR:'🇬🇷 Greece',IE:'🇮🇪 Ireland',LV:'🇱🇻 Latvia',UG:'🇺🇬 Uganda'};
+  function rl(id,data,color){
+    const el=document.getElementById(id);el.innerHTML='';
+    const max=data[0]?.[1]||1;
+    data.forEach(([k,v])=>{
+      const row=document.createElement('div');row.className='region-row';
+      row.innerHTML=`<span class="region-name">${CN[k]||k}</span><div class="region-track"><div class="region-fill" style="width:${Math.round(v/max*100)}%;background:${color}"></div></div><span class="region-num">${Math.round(v)}</span>`;
+      el.appendChild(row);
+    });
+    if(!data.length)el.innerHTML='<div style="color:var(--text3);font-size:13px;padding:6px 0">No data found</div>';
+  }
+  rl('d2d-countries',d2dCD,'#2c5f8a');
+  rl('d2d-distributors',d2dDD,'#1f7a60');
+
+  window._dashData={top20Paid,topFree,topKenp};
+  showTable('paid');
+
+  const allDates=[...D2D.map(r=>r['Start Date']),...D2D.map(r=>r['End Date'])].filter(Boolean).sort();
+  if(allDates.length) document.getElementById('dash-period').textContent=`${allDates[0]}  →  ${allDates[allDates.length-1]}`;
+
+  document.getElementById('upload-screen').style.display='none';
+  document.getElementById('dashboard-screen').style.display='block';
+}
+
+// ══ TABLE ═══════════════════════════════════════════════
+function showTable(tab){
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',['paid','free','kenp'][i]===tab));
+  const {top20Paid,topFree,topKenp}=window._dashData||{};
+  const el=document.getElementById('table-container');
+  if(tab==='paid'){
+    if(!top20Paid?.length){el.innerHTML='<div style="padding:1rem;color:var(--text3);font-size:13px">No paid sales data found.</div>';return;}
+    const max=top20Paid[0][1].paid;
+    el.innerHTML=`<table><thead><tr><th>#</th><th>Title</th><th>Genre</th><th style="text-align:right">Units</th></tr></thead><tbody>${
+      top20Paid.map(([t,d],i)=>`<tr><td>${i+1}</td><td class="title-cell">${t}<span class="platform-pill pill-${d.plat==='Both'?'both':d.plat.toLowerCase()}">${d.plat}</span></td><td><span class="genre-pill">${classifyGenre(t)}</span></td><td class="num"><span class="bar-inline" style="width:${Math.round(d.paid/max*56)}px;background:#2c5f8a"></span>${d.paid}</td></tr>`).join('')
+    }</tbody></table>`;
+  }else if(tab==='free'){
+    if(!topFree?.length){el.innerHTML='<div style="padding:1rem;color:var(--text3);font-size:13px">No free download data found. This comes from the KDP Orders Processed sheet.</div>';return;}
+    const max=topFree[0][1];
+    el.innerHTML=`<table><thead><tr><th>#</th><th>Title</th><th>Genre</th><th style="text-align:right">Free units</th></tr></thead><tbody>${
+      topFree.map(([t,v],i)=>`<tr><td>${i+1}</td><td class="title-cell">${t}<span class="free-badge">FREE</span></td><td><span class="genre-pill">${classifyGenre(t)}</span></td><td class="num"><span class="bar-inline" style="width:${Math.round(v/max*56)}px;background:#8a5c1e"></span>${v}</td></tr>`).join('')
+    }</tbody></table>`;
+  }else if(tab==='kenp'){
+    if(!topKenp?.length){el.innerHTML='<div style="padding:1rem;color:var(--text3);font-size:13px">No KENP data found.</div>';return;}
+    const max=topKenp[0][1];
+    el.innerHTML=`<table><thead><tr><th>#</th><th>Title</th><th>Genre</th><th style="text-align:right">Pages read</th></tr></thead><tbody>${
+      topKenp.map(([t,v],i)=>`<tr><td>${i+1}</td><td class="title-cell">${t}</td><td><span class="genre-pill">${classifyGenre(t)}</span></td><td class="num"><span class="bar-inline" style="width:${Math.round(v/max*56)}px;background:#5c3d8f"></span>${Math.round(v).toLocaleString()}</td></tr>`).join('')
+    }</tbody></table>`;
+  }
+}
+
+// ══ PDF EXPORT ══════════════════════════════════════════
+async function exportPDF(){
+  const overlay=document.getElementById('pdf-overlay');
+  overlay.classList.add('active');
+  const {jsPDF}=window.jspdf;
+  const pdf=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+  const pW=pdf.internal.pageSize.getWidth();
+  const pH=pdf.internal.pageSize.getHeight();
+
+  try{
+    // Page 1: full dashboard capture
+    await new Promise(r=>setTimeout(r,400));
+    const content=document.getElementById('pdf-content');
+    const canvas=await html2canvas(content,{
+      scale:1.6, useCORS:true, backgroundColor:'#f5f3ee',
+      ignoreElements:el=>el.classList.contains('tabs-row')||el.id==='table-container'||el.tagName==='BUTTON'
+    });
+    const imgData=canvas.toDataURL('image/jpeg',0.93);
+    const imgW=pW-20;
+    const imgH=(canvas.height*imgW)/canvas.width;
+
+    // Header band
+    pdf.setFillColor(44,95,138); pdf.rect(0,0,pW,8,'F');
+    pdf.setFont('helvetica','bold'); pdf.setFontSize(14); pdf.setTextColor(255,255,255);
+    pdf.text("Mo's Sales Dashboard", 10, 5.5);
+    const period=document.getElementById('dash-period').textContent;
+    if(period){ pdf.setFont('helvetica','normal'); pdf.setFontSize(8); pdf.text(period, pW-10, 5.5, {align:'right'}); }
+
+    // Dashboard image
+    const availH=pH-12;
+    if(imgH<=availH){
+      pdf.addImage(imgData,'JPEG',10,10,imgW,imgH);
+    }else{
+      const scale=availH/imgH;
+      pdf.addImage(imgData,'JPEG',10,10,imgW*scale,availH);
+    }
+
+    // Pages 2-4: tables
+    const tabs=[['paid','Top 20 Paid Titles'],['free','Free Downloads'],['kenp','Top KENP Reads']];
+    for(const [tab,label] of tabs){
+      showTable(tab);
+      await new Promise(r=>setTimeout(r,150));
+      const tEl=document.getElementById('table-container');
+      if(!tEl.querySelector('table')) continue;
+      const tC=await html2canvas(tEl,{scale:1.6,useCORS:true,backgroundColor:'#ffffff'});
+      const tImg=tC.toDataURL('image/jpeg',0.93);
+      const tW=pW-20;
+      const tH=(tC.height*tW)/tC.width;
+      pdf.addPage();
+      pdf.setFillColor(44,95,138); pdf.rect(0,0,pW,8,'F');
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(12); pdf.setTextColor(255,255,255);
+      pdf.text(label,10,5.5);
+      pdf.addImage(tImg,'JPEG',10,11,tW,Math.min(tH,pH-14));
+    }
+
+    // Footer on all pages
+    const total=pdf.internal.getNumberOfPages();
+    const today=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+    for(let i=1;i<=total;i++){
+      pdf.setPage(i);
+      pdf.setFont('helvetica','normal'); pdf.setFontSize(7); pdf.setTextColor(154,148,144);
+      pdf.text(`Mo's Sales Dashboard  ·  Page ${i} of ${total}  ·  ${today}`,10,pH-3);
+    }
+
+    pdf.save(`mo_sales_report_${new Date().toISOString().slice(0,10)}.pdf`);
+  }catch(err){
+    alert('PDF export failed: '+err.message+'\n\nTip: Try using Chrome or Edge for best PDF export support.');
+  }finally{
+    overlay.classList.remove('active');
+    showTable('paid');
+  }
+}
+
+// ══ RESET ════════════════════════════════════════════════
+function resetDashboard(){
+  Object.keys(fileStore).forEach(k=>delete fileStore[k]);
+  D2D=[]; KDP_EBOOK=[]; KDP_ORDERS=[]; KDP_KENP=[]; KDP_ORDERS_PLACED=[];
+  charts.forEach(c=>c.destroy()); charts=[];
+  document.getElementById('upload-screen').style.display='flex';
+  document.getElementById('dashboard-screen').style.display='none';
+  document.getElementById('error-area').innerHTML='';
+  const btn=document.getElementById('analyseBtn');
+  btn.disabled=false;
+  btn.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Analyse &amp; Build Dashboard';
+  renderSlots();
+}
+</script>
+</body>
+</html>
